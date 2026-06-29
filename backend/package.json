@@ -1,0 +1,31 @@
+{
+  "name": "hackathon-aggregator-backend",
+  "version": "1.0.0",
+  "description": "AI-powered hackathon discovery and recommendation platform",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "scrape": "node scripts/runScrapers.js",
+    "seed": "node scripts/runScrapers.js",
+    "analyze": "node scripts/analyzeHackathons.js",
+    "analyze:all": "node scripts/analyzeHackathons.js --all"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "axios": "^1.7.2",
+    "bcryptjs": "^2.4.3",
+    "cheerio": "^1.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.5.1",
+    "node-cron": "^4.5.0",
+    "string-similarity": "^4.0.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}
