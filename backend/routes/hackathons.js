@@ -1,6 +1,7 @@
 import express from "express";
 import Hackathon from "../models/Hackathon.js";
 import { requireAuth } from "../middleware/auth.js";
+import { requireApiKey } from "../middleware/apiKeyAuth.js";
 import { recommendForUser } from "../services/recommend.js";
 import { analyzeHackathon, isGeminiConfigured } from "../services/geminiAnalyzer.js";
 
@@ -85,6 +86,21 @@ router.get("/", async (req, res) => {
     ]);
 
     res.json({ total, page: pageNum, limit: lim, items });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/hackathons/external/all
+ * Server-to-server access: returns every hackathon in the DB.
+ * Requires the API key, sent either as the "x-api-key" header or as
+ * "apiKey" in the JSON body (base64 of "hackathons_for_synthomind").
+ */
+router.post("/external/all", requireApiKey, async (_req, res) => {
+  try {
+    const items = await Hackathon.find({});
+    res.json({ total: items.length, items });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
