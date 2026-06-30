@@ -4,6 +4,15 @@ import { signToken, requireAuth } from "../middleware/auth.js";
 
 const router = express.Router();
 
+// Emails listed here (or in ADMIN_EMAILS, comma-separated) are auto-promoted to
+// admin on register/login, so the dashboard is available without manual DB edits.
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "deepakmbhosale@gmail.com")
+  .split(",")
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
+
+const isAdminEmail = (email) => ADMIN_EMAILS.includes((email || "").toLowerCase());
+
 // POST /api/auth/register
 router.post("/register", async (req, res) => {
   try {
@@ -14,7 +23,7 @@ router.post("/register", async (req, res) => {
     const exists = await User.findOne({ email: email.toLowerCase() });
     if (exists) return res.status(409).json({ error: "Email already registered" });
 
-    const user = new User({ name, email });
+    const user = new User({ name, email, isAdmin: isAdminEmail(email) });
     await user.setPassword(password);
     await user.save();
 
@@ -33,6 +42,12 @@ router.post("/login", async (req, res) => {
 
     const ok = await user.verifyPassword(password || "");
     if (!ok) return res.status(401).json({ error: "Invalid credentials" });
+
+    // Keep admin status in sync if the email was added to ADMIN_EMAILS later.
+    if (isAdminEmail(user.email) && !user.isAdmin) {
+      user.isAdmin = true;
+      await user.save();
+    }
 
     return res.json({ token: signToken(user), user: user.toSafeJSON() });
   } catch (err) {

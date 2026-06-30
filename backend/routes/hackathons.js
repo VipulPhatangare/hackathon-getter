@@ -1,13 +1,27 @@
 import express from "express";
 import Hackathon from "../models/Hackathon.js";
 import { requireAuth } from "../middleware/auth.js";
+import { requireAdmin } from "../middleware/admin.js";
 import { requireApiKey } from "../middleware/apiKeyAuth.js";
+import { rateLimit } from "../middleware/rateLimit.js";
 import { recommendForUser } from "../services/recommend.js";
-import { analyzeHackathon, isGeminiConfigured } from "../services/geminiAnalyzer.js";
+import {
+  analyzeHackathon,
+  applyAnalysis,
+  isGeminiConfigured,
+  chatAboutHackathon,
+} from "../services/geminiAnalyzer.js";
+import { getSettings } from "../services/settings.js";
 
 const router = express.Router();
 
-const LEGITIMACY_MIN = parseInt(process.env.LEGITIMACY_MIN || "4", 10);
+// Heavy/unused-on-the-public-site fields are stripped from list & detail
+// responses (kept in the DB, used internally / by the analyzer).
+const PUBLIC_EXCLUDE = "-faqs -sponsors -schedule -bannerImage";
+
+// The chat endpoint is public but costs real Gemini quota per message —
+// cap each visitor to 20 messages per 10-minute window.
+const chatLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 20 });
 
 /**
  * GET /api/hackathons
@@ -25,7 +39,7 @@ router.get("/", async (req, res) => {
       platform,
       difficulty,
       minQuality,
-      sort  = "deadline",
+      sort  = "geminiRank",
       page  = 1,
       limit = 24,
     } = req.query;
@@ -51,9 +65,10 @@ router.get("/", async (req, res) => {
     // Legitimacy gate: hide junk hackathons that Gemini has scored.
     // Un-analyzed hackathons (legitimacyScore = null) still show — we never
     // hide something just because we haven't analyzed it yet.
+    const { legitimacyMin } = await getSettings();
     filter.$or = [
       { "aiAnalysis.legitimacyScore": null },
-      { "aiAnalysis.legitimacyScore": { $gte: LEGITIMACY_MIN } },
+      { "aiAnalysis.legitimacyScore": { $gte: legitimacyMin } },
     ];
 
     const sortMap = {
@@ -61,6 +76,7 @@ router.get("/", async (req, res) => {
       newest:   { createdAt: -1 },
       prize:    { _hasPrize: -1, "prizePool.amount": -1 },
       quality:  { "aiAnalysis.qualityScore": -1 },
+      geminiRank: { "aiAnalysis.rankScore": -1, "aiAnalysis.qualityScore": -1, "prizePool.amount": -1 },
     };
 
     const pageNum = Math.max(1, parseInt(page));
@@ -77,7 +93,7 @@ router.get("/", async (req, res) => {
       { $sort: sortMap[sort] || sortMap.deadline },
       { $skip: (pageNum - 1) * lim },
       { $limit: lim },
-      { $project: { _hasDeadline: 0, _hasPrize: 0 } },
+      { $project: { _hasDeadline: 0, _hasPrize: 0, faqs: 0, sponsors: 0, schedule: 0, bannerImage: 0 } },
     ];
 
     const [items, total] = await Promise.all([
@@ -139,35 +155,43 @@ router.get("/filters", async (_req, res) => {
   }
 });
 
-/** GET /api/admin/analysis-status — how many are analyzed vs pending */
-router.get("/admin/analysis-status", async (_req, res) => {
+/** GET /api/hackathons/:id  (public — heavy fields stripped) */
+router.get("/:id", async (req, res) => {
   try {
-    const [analyzed, pending, total, byPlatform] = await Promise.all([
-      Hackathon.countDocuments({ "aiAnalysis.analyzedAt": { $ne: null } }),
-      Hackathon.countDocuments({ "aiAnalysis.analyzedAt": null, status: { $in: ["upcoming", "ongoing"] } }),
-      Hackathon.countDocuments({ status: { $in: ["upcoming", "ongoing"] } }),
-      Hackathon.aggregate([
-        { $group: { _id: "$sourcePlatform", analyzed: { $sum: { $cond: [{ $ne: ["$aiAnalysis.analyzedAt", null] }, 1, 0] } }, total: { $sum: 1 } } },
-      ]),
-    ]);
-    res.json({
-      geminiConfigured: isGeminiConfigured(),
-      analyzed,
-      pending,
-      total,
-      byPlatform,
-    });
+    const h = await Hackathon.findById(req.params.id).select(PUBLIC_EXCLUDE);
+    if (!h) return res.status(404).json({ error: "Not found" });
+    res.json(h);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-/** GET /api/hackathons/:id */
-router.get("/:id", async (req, res) => {
+/**
+ * POST /api/hackathons/:id/chat  (public, rate-limited)
+ * Ask Gemini a question about one specific hackathon. The model is grounded
+ * only in that hackathon's own data — it won't answer unrelated questions.
+ * Body: { message: string, history?: [{ role: "user"|"assistant", text }] }
+ */
+router.post("/:id/chat", chatLimiter, async (req, res) => {
   try {
-    const h = await Hackathon.findById(req.params.id);
+    if (!(await isGeminiConfigured())) {
+      return res.status(503).json({ error: "Gemini is not configured" });
+    }
+
+    const { message, history } = req.body || {};
+    if (!message || typeof message !== "string" || !message.trim()) {
+      return res.status(400).json({ error: "message is required" });
+    }
+
+    const h = await Hackathon.findById(req.params.id).select(PUBLIC_EXCLUDE);
     if (!h) return res.status(404).json({ error: "Not found" });
-    res.json(h);
+
+    const safeHistory = Array.isArray(history)
+      ? history.filter((m) => m && typeof m.text === "string").slice(-10)
+      : [];
+
+    const reply = await chatAboutHackathon(h, message.trim(), safeHistory);
+    res.json({ reply });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -188,44 +212,20 @@ router.post("/:id/save", requireAuth, async (req, res) => {
 });
 
 /**
- * POST /api/hackathons/:id/reanalyze
- * Force a fresh Gemini analysis for one hackathon. No auth required for now
- * (this is a dev/admin tool — add requireAuth if you want to lock it down).
+ * POST /api/hackathons/:id/reanalyze  (admin only)
+ * Force a fresh Gemini analysis for one hackathon.
  */
-router.post("/:id/reanalyze", async (req, res) => {
+router.post("/:id/reanalyze", requireAdmin, async (req, res) => {
   try {
-    if (!isGeminiConfigured()) {
+    if (!(await isGeminiConfigured())) {
       return res.status(503).json({ error: "GEMINI_API_KEY is not configured" });
     }
 
     const h = await Hackathon.findById(req.params.id);
     if (!h) return res.status(404).json({ error: "Not found" });
 
-    // Clear the gate field so analyzeHackathon runs fresh.
-    h.aiAnalysis = { ...h.aiAnalysis?.toObject?.() || {}, analyzedAt: null };
-
     const ai = await analyzeHackathon(h);
-
-    h.aiAnalysis = {
-      analyzedAt:      new Date(),
-      model:           "gemini-2.5-flash",
-      summary:         ai.summary         || "",
-      pitch:           ai.pitch           || "",
-      difficulty:      ai.difficulty      || "all",
-      targetAudience:  ai.targetAudience  || "",
-      requirements:    ai.requirements    || "",
-      judgingCriteria: ai.judgingCriteria || [],
-      highlights:      (ai.highlights     || []).slice(0, 3),
-      legitimacyScore: ai.legitimacyScore ?? null,
-      qualityScore:    ai.qualityScore    ?? null,
-    };
-
-    if (ai.summary)             h.description  = ai.summary;
-    if (ai.themes?.length)      h.themes       = ai.themes;
-    if (ai.technologies?.length) h.technologies = ai.technologies;
-    if (ai.eligibility)         h.eligibility  = ai.eligibility;
-    if (ai.prizePool?.amount != null) h.prizePool = ai.prizePool;
-
+    applyAnalysis(h, ai);
     await h.save();
     res.json({ ok: true, aiAnalysis: h.aiAnalysis });
   } catch (err) {

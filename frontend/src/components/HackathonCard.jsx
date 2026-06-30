@@ -22,27 +22,78 @@ function QualityChip({ score }) {
   );
 }
 
-/** reasons/score are optional — shown only on the recommendations page. */
-export default function HackathonCard({ h, reasons, score }) {
+function Badges({ h, rank, difficulty }) {
+  return (
+    <div className="row" style={{ gap: 5, flexWrap: "wrap" }}>
+      {rank != null && <span className="rank-badge">#{rank}</span>}
+      <span className={`pill ${h.status}`}>{h.status}</span>
+      {h.sourcePlatform && <span className={`platform ${h.sourcePlatform}`}>{h.sourcePlatform}</span>}
+      {difficulty && difficulty !== "all" && <span className={`difficulty ${difficulty}`}>{difficulty}</span>}
+    </div>
+  );
+}
+
+/** reasons/score/rank are optional — shown only on ranking-heavy pages.
+ *  Pass horizontal to render the wide row layout used on the Discover list. */
+export default function HackathonCard({ h, reasons, score, rank, horizontal = false }) {
   const prize      = fmtPrize(h.prizePool);
   const ai         = h.aiAnalysis || {};
   const pitch      = ai.pitch || h.description;
   const difficulty = ai.difficulty;
   const highlights = ai.highlights || [];
 
-  return (
-    <div className="card">
-      {/* Row 1: status + platform + difficulty + quality */}
-      <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 4 }}>
-        <div className="row" style={{ gap: 5, flexWrap: "wrap" }}>
-          <span className={`pill ${h.status}`}>{h.status}</span>
-          {h.sourcePlatform && (
-            <span className={`platform ${h.sourcePlatform}`}>{h.sourcePlatform}</span>
+  if (horizontal) {
+    return (
+      <Link to={`/hackathon/${h._id}`} className="card card-link card-horizontal">
+        <div className="ch-main">
+          <Badges h={h} rank={rank} difficulty={difficulty} />
+          <h3>{h.title}</h3>
+          <div className="meta">
+            {h.organizer || h.sourcePlatform} · {h.mode}
+            {h.location?.city ? ` · ${h.location.city}` : ""}
+          </div>
+          {pitch && (
+            <div className="pitch">{pitch.slice(0, 160)}{pitch.length > 160 ? "…" : ""}</div>
           )}
-          {difficulty && difficulty !== "all" && (
-            <span className={`difficulty ${difficulty}`}>{difficulty}</span>
+          {highlights.length > 0 ? (
+            <ul className="highlights">
+              {highlights.map((hl, i) => <li key={i}>{hl}</li>)}
+            </ul>
+          ) : (
+            <div>
+              {(h.themes || []).slice(0, 4).map((t) => <span className="tag" key={t}>{t}</span>)}
+            </div>
+          )}
+          {reasons?.length > 0 && (
+            <div>
+              {reasons.slice(0, 2).map((r, i) => <div className="reason" key={i}>✓ {r}</div>)}
+            </div>
           )}
         </div>
+
+        <div className="ch-side">
+          <div className="row" style={{ gap: 5 }}>
+            <QualityChip score={ai.qualityScore} />
+            {score != null && <span className="score">{score} match</span>}
+          </div>
+          <div className="meta" style={{ textAlign: "right" }}>
+            🗓 Deadline<br /><b>{fmtDate(h.registrationDeadline)}</b>
+          </div>
+          {prize && (
+            <div className="meta" style={{ textAlign: "right" }}>
+              🏆 Prize<br /><b>{prize}</b>
+            </div>
+          )}
+        </div>
+      </Link>
+    );
+  }
+
+  return (
+    <Link to={`/hackathon/${h._id}`} className="card card-link">
+      {/* Row 1: status + platform + difficulty + quality */}
+      <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 4 }}>
+        <Badges h={h} rank={rank} difficulty={difficulty} />
         <div className="row" style={{ gap: 5 }}>
           <QualityChip score={ai.qualityScore} />
           {score != null && <span className="score">{score} match</span>}
@@ -50,9 +101,7 @@ export default function HackathonCard({ h, reasons, score }) {
       </div>
 
       {/* Title */}
-      <h3>
-        <Link to={`/hackathon/${h._id}`}>{h.title}</Link>
-      </h3>
+      <h3>{h.title}</h3>
 
       {/* Organizer / mode / location */}
       <div className="meta">
@@ -95,6 +144,6 @@ export default function HackathonCard({ h, reasons, score }) {
           ))}
         </div>
       )}
-    </div>
+    </Link>
   );
 }

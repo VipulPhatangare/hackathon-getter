@@ -7,6 +7,9 @@ const userSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true },
 
+    // ----- access control -----
+    isAdmin: { type: Boolean, default: false },
+
     // ----- profile used by the recommendation engine -----
     interests: { type: [String], default: [] }, // themes the user cares about
     skills: { type: [String], default: [] }, // technologies the user knows

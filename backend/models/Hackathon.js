@@ -102,6 +102,7 @@ const hackathonSchema = new mongoose.Schema(
       analyzedAt:      { type: Date, default: null },   // null = not yet analyzed (the gate field)
       model:           { type: String, default: "" },
       summary:         { type: String, default: "" },   // 2-3 sentence clean description
+      longDescription: { type: String, default: "" },   // 300-1000 word in-depth write-up
       pitch:           { type: String, default: "" },   // 1-sentence "why join this"
       difficulty:      { type: String, default: "" },   // beginner | intermediate | advanced | all
       targetAudience:  { type: String, default: "" },
@@ -110,6 +111,7 @@ const hackathonSchema = new mongoose.Schema(
       highlights:      { type: [String], default: [] }, // 3 key bullets for card/detail
       legitimacyScore: { type: Number, default: null }, // 1-10; gate: hide < LEGITIMACY_MIN
       qualityScore:    { type: Number, default: null }, // 1-10; UI quality-filter slider
+      rankScore:       { type: Number, default: null }, // 1-10; overall Gemini ranking score
     },
 
     // ----- system fields -----

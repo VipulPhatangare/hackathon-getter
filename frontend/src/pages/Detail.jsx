@@ -1,14 +1,12 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../AuthContext.jsx";
+import HackathonChat from "../components/HackathonChat.jsx";
 import "../styles.css";
 
 function fmt(d) {
   return d ? new Date(d).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "TBA";
-}
-function fmtDate(d) {
-  return d ? new Date(d).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "TBA";
 }
 
 function Section({ title, children }) {
@@ -45,90 +43,14 @@ function PrizeBreakdown({ prizes }) {
   );
 }
 
-function Sponsors({ sponsors }) {
-  if (!sponsors?.length) return null;
+function AboutSection({ text }) {
+  if (!text) return null;
+  const paragraphs = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
   return (
-    <Section title={`Sponsors (${sponsors.length})`}>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-        {sponsors.map((s, i) => (
-          <div key={i} className="card" style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: "10px 14px", minWidth: 160 }}>
-            {s.logo && (
-              <img
-                src={s.logo}
-                alt={s.name}
-                style={{ width: 36, height: 36, objectFit: "contain", borderRadius: 4, background: "#fff", padding: 2 }}
-                onError={(e) => { e.target.style.display = "none"; }}
-              />
-            )}
-            <div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{s.name}</div>
-              {s.domain && <div className="meta" style={{ fontSize: 11 }}>{s.domain}</div>}
-              {s.tier && <span className="tag" style={{ fontSize: 10, padding: "1px 6px" }}>{s.tier}</span>}
-            </div>
-          </div>
-        ))}
-      </div>
-    </Section>
-  );
-}
-
-function Schedule({ schedule }) {
-  if (!schedule?.length) return null;
-  const grouped = schedule.reduce((acc, event) => {
-    const key = event.group || "Events";
-    (acc[key] ??= []).push(event);
-    return acc;
-  }, {});
-
-  return (
-    <Section title="Schedule">
-      {Object.entries(grouped).map(([groupName, events]) => (
-        <div key={groupName} style={{ marginBottom: 16 }}>
-          {Object.keys(grouped).length > 1 && (
-            <div style={{ fontWeight: 700, fontSize: 13, color: "var(--accent)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              {groupName}
-            </div>
-          )}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {events.map((e, i) => (
-              <div key={i} className="card" style={{ flexDirection: "row", gap: 16, padding: "10px 14px" }}>
-                <div style={{ minWidth: 120, color: "var(--muted)", fontSize: 12 }}>
-                  <div>{fmtDate(e.startsAt)}</div>
-                  {e.endsAt && e.endsAt !== e.startsAt && <div>{fmtDate(e.endsAt)}</div>}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600 }}>{e.title}</div>
-                  {e.description && <div className="meta" style={{ marginTop: 2 }}>{e.description}</div>}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </Section>
-  );
-}
-
-function FAQs({ faqs }) {
-  const [open, setOpen] = useState(null);
-  if (!faqs?.length) return null;
-  return (
-    <Section title="FAQs">
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {faqs.map((f, i) => (
-          <div key={i} className="card" style={{ padding: "12px 16px", cursor: "pointer" }} onClick={() => setOpen(open === i ? null : i)}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontWeight: 600, flex: 1 }}>{f.question}</div>
-              <span style={{ color: "var(--accent)", fontWeight: 700, marginLeft: 12 }}>
-                {open === i ? "−" : "+"}
-              </span>
-            </div>
-            {open === i && (
-              <div className="meta" style={{ marginTop: 10, whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
-                {f.answer}
-              </div>
-            )}
-          </div>
+    <Section title="About this hackathon">
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {paragraphs.map((p, i) => (
+          <p key={i} style={{ margin: 0, lineHeight: 1.75, color: "#374151" }}>{p}</p>
         ))}
       </div>
     </Section>
@@ -159,29 +81,18 @@ function SocialLinks({ links, contactEmail }) {
 
 export default function Detail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
+
+  // Go back if there's history, otherwise fall back to the discover page.
+  const goBack = () => (window.history.length > 1 ? navigate(-1) : navigate("/"));
   const [h, setH]               = useState(null);
   const [saved, setSaved]       = useState(false);
   const [err, setErr]           = useState("");
-  const [reanalyzing, setReanalyzing] = useState(false);
-  const [reanalyzeDone, setReanalyzeDone] = useState(false);
 
   useEffect(() => {
     api.get(id).then(setH).catch((e) => setErr(e.message));
   }, [id]);
-
-  async function triggerReanalyze() {
-    setReanalyzing(true);
-    try {
-      const r = await api.reanalyze(id);
-      setH((prev) => ({ ...prev, aiAnalysis: r.aiAnalysis }));
-      setReanalyzeDone(true);
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setReanalyzing(false);
-    }
-  }
 
   async function toggleSave() {
     try {
@@ -196,7 +107,14 @@ export default function Detail() {
   if (!h) return <div className="container empty">Loading…</div>;
 
   return (
-    <div className="container" style={{ maxWidth: 800, paddingTop: 28, paddingBottom: 48 }}>
+    <div className="container" style={{ paddingTop: 28, paddingBottom: 48 }}>
+      {/* Back */}
+      <button className="btn ghost sm back-btn" onClick={goBack} style={{ marginBottom: 16 }}>
+        ← Back
+      </button>
+
+      <div className="detail-layout">
+      <div className="detail-main">
       {/* Header */}
       <div className="row" style={{ gap: 10, flexWrap: "wrap", justifyContent: "space-between" }}>
         <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
@@ -235,17 +153,7 @@ export default function Detail() {
         )}
       </div>
 
-      {/* Banner */}
-      {h.bannerImage && (
-        <img
-          src={h.bannerImage}
-          alt={h.title}
-          style={{ width: "100%", borderRadius: 12, marginTop: 16, maxHeight: 280, objectFit: "cover" }}
-          onError={(e) => { e.target.style.display = "none"; }}
-        />
-      )}
-
-      <h1 style={{ marginTop: 14, marginBottom: 4 }}>{h.title}</h1>
+      <h1 style={{ marginTop: 18, marginBottom: 4 }}>{h.title}</h1>
       {h.tagline && <div style={{ color: "var(--accent-2)", fontStyle: "italic", marginBottom: 4 }}>{h.tagline}</div>}
       <div className="muted">
         {h.organizer || h.sourcePlatform}
@@ -280,8 +188,11 @@ export default function Detail() {
         ))}
       </div>
 
+      {/* AI-generated in-depth write-up (300-1000 words) */}
+      <AboutSection text={h.aiAnalysis?.longDescription} />
+
       {/* Key Info */}
-      <div className="card" style={{ gap: 8, marginTop: 20 }}>
+      <div className="info-card" style={{ marginTop: 20 }}>
         <div>🗓 Registration deadline: <b>{fmt(h.registrationDeadline)}</b></div>
         <div>📤 Submission deadline: <b>{fmt(h.submissionDeadline)}</b></div>
         <div>▶ Starts: <b>{fmt(h.startDate)}</b> · ⏹ Ends: <b>{fmt(h.endDate)}</b></div>
@@ -319,16 +230,6 @@ export default function Detail() {
             {saved ? "★ Saved" : "☆ Save"}
           </button>
         )}
-        {/* Re-analyze button — clears aiAnalysis and re-runs Gemini */}
-        <button
-          className="btn ghost"
-          onClick={triggerReanalyze}
-          disabled={reanalyzing}
-          title="Re-run Gemini analysis for this hackathon"
-          style={{ fontSize: 12 }}
-        >
-          {reanalyzing ? "Analyzing…" : reanalyzeDone ? "✓ Done" : "⟳ Re-analyze with AI"}
-        </button>
       </div>
 
       {/* Cross-platform links */}
@@ -378,11 +279,15 @@ export default function Detail() {
         </div>
       )}
 
-      {/* Rich sections */}
+      {/* Prizes (sponsors / schedule / FAQs are intentionally not shown publicly) */}
       <PrizeBreakdown prizes={h.prizes} />
-      <Sponsors sponsors={h.sponsors} />
-      <Schedule schedule={h.schedule} />
-      <FAQs faqs={h.faqs} />
+      </div>
+
+      {/* Gemini chat — scoped to this hackathon only */}
+      <div className="detail-chat-col">
+        <HackathonChat hackathonId={id} hackathonTitle={h.title} />
+      </div>
+      </div>
     </div>
   );
 }

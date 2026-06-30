@@ -30,8 +30,14 @@ export default function Recommended() {
         </div>
       ) : (
         <div className="grid">
-          {items.map(({ hackathon, score, reasons }) => (
-            <HackathonCard key={hackathon._id} h={hackathon} score={score} reasons={reasons} />
+          {items.map(({ hackathon, score, reasons }, idx) => (
+            <HackathonCard
+              key={hackathon._id}
+              h={hackathon}
+              rank={idx + 1}
+              score={score}
+              reasons={reasons}
+            />
           ))}
         </div>
       )}

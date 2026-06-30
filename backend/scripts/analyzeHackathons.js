@@ -73,6 +73,7 @@ async function applyAnalysis(h, ai) {
     analyzedAt:      new Date(),
     model:           "gemini-2.5-flash",
     summary:         ai.summary         || "",
+    longDescription: ai.longDescription || "",
     pitch:           ai.pitch           || "",
     difficulty:      ai.difficulty      || "all",
     targetAudience:  ai.targetAudience  || "",
@@ -82,6 +83,7 @@ async function applyAnalysis(h, ai) {
     eligibility:     ai.eligibility     || "",
     legitimacyScore: ai.legitimacyScore ?? null,
     qualityScore:    ai.qualityScore    ?? null,
+    rankScore:       ai.rankScore       ?? null,
   };
 
   // Gemini-provided values override scraper values for richer fields.
@@ -97,12 +99,12 @@ async function applyAnalysis(h, ai) {
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  if (!isGeminiConfigured()) {
+  await connectDB();
+
+  if (!(await isGeminiConfigured())) {
     console.error("[analyze] GEMINI_API_KEY is not set in .env — aborting.");
     process.exit(1);
   }
-
-  await connectDB();
 
   const forceAll = process.argv.includes("--all");
   const idFlag   = process.argv.indexOf("--id");

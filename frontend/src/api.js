@@ -38,6 +38,14 @@ export const api = {
   filters:      () => request("/hackathons/filters"),
   recommended:  () => request("/hackathons/recommended", { auth: true }),
   toggleSave:   (id) => request(`/hackathons/${id}/save`, { method: "POST", auth: true }),
-  reanalyze:    (id) => request(`/hackathons/${id}/reanalyze`, { method: "POST" }),
-  adminStatus:  () => request("/hackathons/admin/analysis-status"),
+  reanalyze:    (id) => request(`/hackathons/${id}/reanalyze`, { method: "POST", auth: true }),
+  chat:         (id, body) => request(`/hackathons/${id}/chat`, { method: "POST", body }),
+
+  // admin (all require an admin JWT)
+  adminStats:    () => request("/admin/stats", { auth: true }),
+  adminSettings: () => request("/admin/settings", { auth: true }),
+  adminSaveSettings: (body) => request("/admin/settings", { method: "PUT", body, auth: true }),
+  adminScrape:   () => request("/admin/scrape", { method: "POST", auth: true }),
+  adminAnalyze:  () => request("/admin/analyze", { method: "POST", auth: true }),
+  adminRuns:     () => request("/admin/runs", { auth: true }),
 };

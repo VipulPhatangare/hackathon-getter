@@ -4,6 +4,21 @@ import HackathonCard from "../components/HackathonCard.jsx";
 
 const PAGE_SIZE = 24;
 
+function getPageButtons(currentPage, totalPages) {
+  const raw = [1, totalPages, currentPage - 1, currentPage, currentPage + 1]
+    .filter((p) => p >= 1 && p <= totalPages)
+    .sort((a, b) => a - b);
+
+  return raw.reduce((acc, p) => {
+    const prev = acc[acc.length - 1];
+    if (typeof prev === "number" && p - prev > 1) acc.push("…");
+    if (prev !== p) acc.push(p);
+    return acc;
+  }, []);
+}
+
+const EMPTY_Q = { search: "", theme: "", tech: "", mode: "", platform: "", difficulty: "", sort: "geminiRank" };
+
 export default function Home() {
   const [items, setItems]     = useState([]);
   const [total, setTotal]     = useState(0);
@@ -11,12 +26,10 @@ export default function Home() {
   const [filters, setFilters] = useState({
     themes: [], technologies: [], modes: [], platforms: [], difficulties: [],
   });
-  const [q, setQ] = useState({
-    search: "", theme: "", tech: "", mode: "", platform: "",
-    difficulty: "", sort: "deadline",
-  });
+  const [q, setQ] = useState(EMPTY_Q);
   const [minQuality, setMinQuality] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     api.filters().then(setFilters).catch(() => {});
@@ -31,47 +44,67 @@ export default function Home() {
     return `?${params.toString()}`;
   };
 
-  const fetchPage1 = (quality = minQuality) => {
+  const loadPage = (pageNum, quality = minQuality) => {
     setLoading(true);
-    setPage(1);
-    api.list(buildQs(1, quality))
-      .then((d) => { setItems(d.items); setTotal(d.total); })
+    api.list(buildQs(pageNum, quality))
+      .then((d) => {
+        setItems(d.items);
+        setTotal(d.total);
+        setPage(pageNum);
+      })
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetchPage1(); }, [q]);                          // filter change
-  useEffect(() => { fetchPage1(minQuality); }, [minQuality]);       // slider change
+  useEffect(() => { loadPage(1, minQuality); }, [q, minQuality]);
 
-  const loadMore = () => {
-    const next = page + 1;
-    setLoading(true);
-    api.list(buildQs(next))
-      .then((d) => { setItems((p) => [...p, ...d.items]); setTotal(d.total); setPage(next); })
-      .finally(() => setLoading(false));
+  const goToPage = (nextPage) => {
+    if (nextPage < 1 || nextPage === page) return;
+    loadPage(nextPage);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const upd = (k) => (e) => setQ((s) => ({ ...s, [k]: e.target.value }));
+  const resetFilters = () => { setQ(EMPTY_Q); setMinQuality(0); };
 
   const difficultyLabels = { beginner: "Beginner", intermediate: "Intermediate", advanced: "Advanced", all: "All levels" };
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const pageButtons = getPageButtons(page, totalPages);
 
   return (
-    <div className="container">
-      <div className="hero">
-        <h1>Every hackathon, in one place.</h1>
-        <p>
-          Aggregated from Devpost, Devfolio, and Unstop — AI-analyzed, de-duplicated, and searchable.
-        </p>
-      </div>
-
-      <div className="filters">
-        {/* Search */}
-        <div style={{ flex: 2, minWidth: 180 }}>
-          <label>Search</label>
-          <input placeholder="AI, web3, climate…" value={q.search} onChange={upd("search")} />
+    <>
+      <div className="container">
+        <div className="hero">
+          <h1>Every hackathon, <span className="grad">in one place.</span></h1>
+          <p>
+            Aggregated from Devpost, Devfolio, and Unstop — AI-analyzed, de-duplicated, and searchable.
+          </p>
         </div>
 
-        {/* Platform */}
-        <div>
+        <button className="btn secondary filters-toggle" onClick={() => setFiltersOpen((o) => !o)}>
+          ⚙ Filters {filtersOpen ? "▲" : "▼"}
+        </button>
+      </div>
+
+      <div className="discover-shell">
+        {/* ---- Sidebar filters — fixed to the viewport's left edge ---- */}
+        <aside className={`filters-sidebar${filtersOpen ? " open" : ""}`}>
+          <div className="fs-head">
+            <h3>Filters</h3>
+            <button className="btn ghost sm" onClick={resetFilters}>Reset</button>
+          </div>
+
+          <label>Search</label>
+          <input placeholder="AI, web3, climate…" value={q.search} onChange={upd("search")} />
+
+          <label>Sort by</label>
+          <select value={q.sort} onChange={upd("sort")}>
+            <option value="geminiRank">Gemini rank</option>
+            <option value="deadline">Deadline</option>
+            <option value="newest">Newest</option>
+            <option value="prize">Prize</option>
+            <option value="quality">Quality</option>
+          </select>
+
           <label>Platform</label>
           <select value={q.platform} onChange={upd("platform")}>
             <option value="">All platforms</option>
@@ -79,10 +112,7 @@ export default function Home() {
               <option key={p} value={p}>{p[0].toUpperCase() + p.slice(1)}</option>
             ))}
           </select>
-        </div>
 
-        {/* Difficulty */}
-        <div>
           <label>Difficulty</label>
           <select value={q.difficulty} onChange={upd("difficulty")}>
             <option value="">All levels</option>
@@ -90,39 +120,19 @@ export default function Home() {
               <option key={d} value={d}>{difficultyLabels[d] || d}</option>
             ))}
           </select>
-        </div>
 
-        {/* Theme */}
-        <div>
           <label>Theme</label>
           <select value={q.theme} onChange={upd("theme")}>
             <option value="">All</option>
             {filters.themes.map((t) => <option key={t}>{t}</option>)}
           </select>
-        </div>
 
-        {/* Mode */}
-        <div>
           <label>Mode</label>
           <select value={q.mode} onChange={upd("mode")}>
             <option value="">All</option>
             {filters.modes.map((m) => <option key={m}>{m}</option>)}
           </select>
-        </div>
 
-        {/* Sort */}
-        <div>
-          <label>Sort</label>
-          <select value={q.sort} onChange={upd("sort")}>
-            <option value="deadline">Deadline</option>
-            <option value="newest">Newest</option>
-            <option value="prize">Prize</option>
-            <option value="quality">Quality</option>
-          </select>
-        </div>
-
-        {/* Quality slider */}
-        <div style={{ minWidth: 160 }}>
           <label>Min quality {minQuality > 0 ? `≥ ${minQuality}` : "(any)"}</label>
           <div className="quality-slider-wrap">
             <span className="val">0</span>
@@ -132,42 +142,73 @@ export default function Home() {
             />
             <span className="val">10</span>
           </div>
-        </div>
-      </div>
+        </aside>
 
-      <div className="muted" style={{ marginBottom: 12 }}>
-        {loading && items.length === 0
-          ? "Loading…"
-          : `Showing ${items.length} of ${total} live & upcoming hackathons`
-        }
-        {minQuality > 0 && (
-          <span style={{ marginLeft: 10, color: "var(--accent-2)", fontSize: 12 }}>
-            · quality ≥ {minQuality} filter active
-          </span>
-        )}
-      </div>
-
-      {items.length === 0 && !loading ? (
-        <div className="empty">
-          No hackathons match these filters.
-          {minQuality > 0 && (
-            <> Try lowering the quality slider. <button className="btn ghost" onClick={() => setMinQuality(0)}>Reset</button></>
-          )}
-        </div>
-      ) : (
-        <>
-          <div className="grid">
-            {items.map((h) => <HackathonCard key={h._id} h={h} />)}
+        {/* ---- Results ---- */}
+        <div className="results-col">
+          <div className="muted" style={{ marginBottom: 12 }}>
+            {loading && items.length === 0
+              ? "Loading…"
+              : `Showing ${items.length} of ${total} live & upcoming hackathons · Page ${page} of ${totalPages}`
+            }
+            {minQuality > 0 && (
+              <span style={{ marginLeft: 10, color: "var(--accent-2)", fontSize: 12 }}>
+                · quality ≥ {minQuality} filter active
+              </span>
+            )}
           </div>
-          {items.length < total && (
-            <div style={{ textAlign: "center", margin: "24px 0" }}>
-              <button className="btn" onClick={loadMore} disabled={loading}>
-                {loading ? "Loading…" : `Load more (${total - items.length} left)`}
-              </button>
+
+          {items.length === 0 && !loading ? (
+            <div className="empty">
+              No hackathons match these filters.
+              {minQuality > 0 && (
+                <> Try lowering the quality slider. <button className="btn ghost" onClick={() => setMinQuality(0)}>Reset</button></>
+              )}
             </div>
+          ) : (
+            <>
+              <div className="list">
+                {items.map((h, idx) => (
+                  <HackathonCard
+                    key={h._id}
+                    h={h}
+                    rank={(page - 1) * PAGE_SIZE + idx + 1}
+                    horizontal
+                  />
+                ))}
+              </div>
+              {totalPages > 1 && (
+                <div className="pager">
+                  <button className="btn secondary" onClick={() => goToPage(page - 1)} disabled={loading || page === 1}>
+                    ← Prev
+                  </button>
+
+                  <div className="pager-pages">
+                    {pageButtons.map((p, i) => (
+                      p === "…" ? (
+                        <span className="pager-ellipsis" key={`ellipsis-${i}`}>…</span>
+                      ) : (
+                        <button
+                          key={p}
+                          className={`pager-page${p === page ? " active" : ""}`}
+                          onClick={() => goToPage(p)}
+                          disabled={loading}
+                        >
+                          {p}
+                        </button>
+                      )
+                    ))}
+                  </div>
+
+                  <button className="btn secondary" onClick={() => goToPage(page + 1)} disabled={loading || page === totalPages}>
+                    Next →
+                  </button>
+                </div>
+              )}
+            </>
           )}
-        </>
-      )}
-    </div>
+        </div>
+      </div>
+    </>
   );
 }
