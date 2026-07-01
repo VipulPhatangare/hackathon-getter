@@ -37,7 +37,24 @@ router.post("/register", async (req, res) => {
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email: (email || "").toLowerCase() });
+    const normalizedEmail = (email || "").toLowerCase();
+
+    // Env-based admin shortcut: if ADMIN_PASSWORD is set and credentials match,
+    // find-or-create the admin DB user so requireAuth can look them up later.
+    const envAdminPassword = process.env.ADMIN_PASSWORD || "";
+    if (envAdminPassword && isAdminEmail(normalizedEmail) && password === envAdminPassword) {
+      let user = await User.findOne({ email: normalizedEmail });
+      if (!user) {
+        user = new User({ name: "Admin", email: normalizedEmail, isAdmin: true });
+        await user.setPassword(envAdminPassword);
+        await user.save();
+      } else {
+        if (!user.isAdmin) { user.isAdmin = true; await user.save(); }
+      }
+      return res.json({ token: signToken(user), user: user.toSafeJSON() });
+    }
+
+    const user = await User.findOne({ email: normalizedEmail });
     if (!user) return res.status(401).json({ error: "Invalid credentials" });
 
     const ok = await user.verifyPassword(password || "");
