@@ -38,7 +38,8 @@ function Badges({ h, rank, difficulty }) {
 export default function HackathonCard({ h, reasons, score, rank, horizontal = false }) {
   const prize      = fmtPrize(h.prizePool);
   const ai         = h.aiAnalysis || {};
-  const pitch      = ai.pitch || h.description;
+  // AI-generated copy only — never fall back to the raw scraped description.
+  const pitch      = ai.pitch || "";
   const difficulty = ai.difficulty;
   const highlights = ai.highlights || [];
 
@@ -109,7 +110,7 @@ export default function HackathonCard({ h, reasons, score, rank, horizontal = fa
         {h.location?.city ? ` · ${h.location.city}` : ""}
       </div>
 
-      {/* AI pitch (falls back to raw description) */}
+      {/* AI pitch — only shown once Gemini has analyzed this hackathon */}
       {pitch && (
         <div className="pitch">{pitch.slice(0, 130)}{pitch.length > 130 ? "…" : ""}</div>
       )}

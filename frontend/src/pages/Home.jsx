@@ -72,19 +72,6 @@ export default function Home() {
 
   return (
     <>
-      <div className="container">
-        <div className="hero">
-          <h1>Every hackathon, <span className="grad">in one place.</span></h1>
-          <p>
-            Aggregated from Devpost, Devfolio, and Unstop — AI-analyzed, de-duplicated, and searchable.
-          </p>
-        </div>
-
-        <button className="btn secondary filters-toggle" onClick={() => setFiltersOpen((o) => !o)}>
-          ⚙ Filters {filtersOpen ? "▲" : "▼"}
-        </button>
-      </div>
-
       <div className="discover-shell">
         {/* ---- Sidebar filters — fixed to the viewport's left edge ---- */}
         <aside className={`filters-sidebar${filtersOpen ? " open" : ""}`}>
@@ -146,6 +133,11 @@ export default function Home() {
 
         {/* ---- Results ---- */}
         <div className="results-col">
+          {/* Filters toggle — only visible on mobile, sits above the card list */}
+          <button className="btn secondary filters-toggle" onClick={() => setFiltersOpen((o) => !o)}>
+            ⚙ Filters {filtersOpen ? "▲" : "▼"}
+          </button>
+
           <div className="muted" style={{ marginBottom: 12 }}>
             {loading && items.length === 0
               ? "Loading…"

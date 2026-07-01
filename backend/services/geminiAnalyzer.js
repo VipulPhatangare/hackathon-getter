@@ -22,12 +22,19 @@ const RESPONSE_SCHEMA = {
     longDescription: {
       type: SchemaType.STRING,
       description:
-        "An in-depth, engaging write-up of the hackathon between 300 and 1000 words. " +
-        "Cover: what the hackathon is about and its theme, what participants will actually build or do, " +
-        "who it's for, why it's worth joining, the format/experience, prizes and what's at stake, and any " +
-        "standout details. Write in clear, well-organized prose (multiple short paragraphs separated by a " +
-        "blank line). Never invent facts not supported by the data — if details are thin, write a shorter " +
-        "piece grounded only in what's known rather than padding with filler.",
+        "An in-depth, engaging write-up of the hackathon between 500 and 1200 words. This is the primary " +
+        "editorial content shown on the hackathon's page — it replaces the raw scraped description entirely, " +
+        "so it must stand on its own as a complete, well-written piece. " +
+        "Structure it as 5-8 short paragraphs (blank line between each) covering, in roughly this order: " +
+        "(1) a strong opening hook — what the hackathon is and why it stands out, " +
+        "(2) the theme/focus and the kinds of projects participants will actually build, " +
+        "(3) who it's for (skill level, eligibility, team size), " +
+        "(4) the format and experience — online/offline, duration, mentorship, workshops, community, " +
+        "(5) prizes and what's genuinely at stake, " +
+        "(6) a closing paragraph on why a developer should commit their time to this one. " +
+        "Write in clear, specific, engaging prose — avoid generic hackathon-marketing filler. " +
+        "Ground every claim in the provided data; never invent organizers, prize amounts, dates, or facts. " +
+        "If the source data is thin, write a shorter, honest piece rather than padding it out.",
     },
     pitch: {
       type: SchemaType.STRING,
@@ -190,17 +197,25 @@ export function buildContext(h) {
  * Settings.systemPrompt; when that field is blank we fall back to this text.
  * The "HACKATHON DATA:" block is appended automatically in analyzeHackathon().
  */
-export const DEFAULT_PROMPT_HEADER = `You are an expert hackathon analyst. Analyze the following hackathon listing and return a structured JSON response. Be concise and accurate.
+export const DEFAULT_PROMPT_HEADER = `You are an expert hackathon analyst and editorial writer. Your job: read the raw, messy, inconsistently-formatted hackathon data below (scraped from Devpost, Devfolio, or Unstop) and turn it into a clean, trustworthy, well-written listing — then score it honestly.
 
-Key rules:
-- legitimacyScore: penalize heavily for vague prizes ("exciting goodies"), no known organizer, no cash prizes, poor description, feels like a certificate farm
-- qualityScore: reward cash prizes, clear requirements, reputable organizer, global reach, learning value
-- rankScore: overall score from 1-10. Use qualityScore, prizePool, difficulty, legitimacy, clarity, and learning value together. Higher difficulty should help when the hackathon is still well organized and worth joining.
-- highlights: exactly 3 short bullets a developer would want to know at a glance
-- pitch: one sentence that makes a developer want to click through
-- difficulty: base this on required skills and project complexity described
-- longDescription: a thorough 300-1000 word write-up in multiple short paragraphs — grounded only in the
-  provided data, never invented. This is the main read for someone deciding whether to join.`;
+GROUNDING RULE (most important): every fact you state — organizer, prize amounts, dates, eligibility, themes — must come from the data provided. Never invent, guess, or embellish a fact. If something isn't in the data, leave it out rather than making it up. Vague or thin source data should produce a shorter, honest write-up, not a padded one.
+
+CONTENT FIELDS
+- summary: 2-3 sentences, neutral and factual — the quick-read version.
+- longDescription: 500-1200 words, 5-8 short paragraphs, the main editorial piece a developer reads to decide whether to join. This fully replaces the raw scraped description, so it must be complete, specific, and engaging on its own — never generic hackathon-marketing filler ("don't miss this exciting opportunity!"). See the field schema below for the exact structure to follow.
+- pitch: one punchy sentence that makes a developer want to click through.
+- highlights: exactly 3 short bullets — the things a developer would want to know at a glance (prize, format, standout perk).
+- targetAudience / eligibility / requirements: short, condensed, factual.
+- themes / technologies: normalize and de-duplicate tags from the raw data; don't invent ones that aren't implied.
+- difficulty: infer from the skills and project complexity actually described, not from the event's tone.
+
+SCORING FIELDS (1-10 each)
+- legitimacyScore: penalize heavily for vague prizes ("exciting goodies"), no identifiable organizer, no cash prizes, thin/copy-paste descriptions, or anything that reads like a certificate farm. Reward known organizers, clear rules, and verifiable prizes.
+- qualityScore: reward cash prizes, clear requirements, a reputable organizer, global reach, and genuine learning value (mentorship, workshops, swag-as-bonus-not-substitute).
+- rankScore: the overall "is this worth a developer's time" score — combine qualityScore, prize pool size, difficulty, legitimacy, and clarity. Higher difficulty should raise the score only when the event is otherwise well organized and worth the extra effort, not on its own.
+
+Be concise everywhere except longDescription, and accurate everywhere, always.`;
 
 /**
  * Analyze a single hackathon DB record with Gemini.

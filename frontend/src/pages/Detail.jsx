@@ -89,7 +89,6 @@ export default function Detail() {
   const [h, setH]               = useState(null);
   const [saved, setSaved]       = useState(false);
   const [err, setErr]           = useState("");
-
   useEffect(() => {
     api.get(id).then(setH).catch((e) => setErr(e.message));
   }, [id]);
@@ -180,7 +179,8 @@ export default function Detail() {
         </ul>
       )}
 
-      {h.description && <p style={{ marginTop: 14, lineHeight: 1.7 }}>{h.description}</p>}
+      {/* AI-generated summary only — never the raw scraped description */}
+      {h.aiAnalysis?.summary && <p style={{ marginTop: 14, lineHeight: 1.7 }}>{h.aiAnalysis.summary}</p>}
 
       <div style={{ marginTop: 10 }}>
         {(h.themes || []).map((t) => (
@@ -283,7 +283,7 @@ export default function Detail() {
       <PrizeBreakdown prizes={h.prizes} />
       </div>
 
-      {/* Gemini chat — scoped to this hackathon only */}
+      {/* Gemini chat — fixed right sidebar on desktop, stacks below content on mobile */}
       <div className="detail-chat-col">
         <HackathonChat hackathonId={id} hackathonTitle={h.title} />
       </div>
